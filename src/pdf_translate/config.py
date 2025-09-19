@@ -20,6 +20,7 @@ class TranslateConfig:
     model: str = "qwen2.5-7b-instruct"
     batch_size: int = 10
     cache: str = "cache/translations.json"
+    api_key: Optional[str] = None
 
 
 @dataclass
@@ -62,6 +63,7 @@ def _build_translate_config(data: Dict[str, Any]) -> TranslateConfig:
         model=str(data.get("model", "qwen2.5-7b-instruct")),
         batch_size=int(data.get("batch_size", 10)),
         cache=str(data.get("cache", "cache/translations.json")),
+        api_key=data.get("api_key"),
     )
 
 

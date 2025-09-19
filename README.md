@@ -96,6 +96,7 @@ Edit `configs/config.yaml` to point to your files and environment. Important key
 - `cleanup_working`: set to `true` to remove temporary files in `working_dir` after a successful run.
 - `ocr.enabled`: set to `true` if the PDF may contain scans; disable to skip the OCR step.
 - `translate.api_base` / `model` / `batch_size`: connection details for the local vLLM server.
+- `translate.api_key`: optional API token if your endpoint requires one (omit or leave blank for unsecured local instances).
 - `translate.cache`: location for the translation cache JSON file.
 - `layout.overflow_shrink_pct`: how aggressively to shrink font size when overlays would overflow their bounding boxes (Pipeline B).
 - `layout.font`: ReportLab font name or a path to a TTF file used for overlay rendering.

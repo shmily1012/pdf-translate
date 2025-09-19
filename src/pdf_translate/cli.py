@@ -40,6 +40,7 @@ def main(argv: list[str] | None = None) -> int:
         model=config.translate.model,
         batch_size=config.translate.batch_size,
         cache=cache,
+        api_key=config.translate.api_key,
     )
 
     if config.pipeline == "A":
