@@ -46,6 +46,28 @@ Install these system tools before using the project:
 
 ---
 
+## Docker Option
+Prefer a containerized setup? A `Dockerfile` is provided that bundles LibreOffice, ocrmypdf, Tesseract (with Korean data), fonts, and the Python project.
+
+1. Build the image from the project root:
+   ```bash
+   docker build -t pdf-translate .
+   ```
+2. Run the pipeline, mounting your working directories so results persist:
+   ```bash
+   docker run --rm \
+     -v "$(pwd)/configs:/app/configs" \
+     -v "$(pwd)/data:/app/data" \
+     -v "$(pwd)/outputs:/app/outputs" \
+     -v "$(pwd)/cache:/app/cache" \
+     pdf-translate --config configs/config.yaml
+   ```
+3. If your vLLM server is on the host machine, make sure the container can reach it. On Linux you can add `--network host`; otherwise point `translate.api_base` to an address accessible from inside the container (for example `http://host.docker.internal:8000/v1`).
+
+The default entrypoint already runs `pdf-translate --config configs/config.yaml`, so you can omit the command override if the mount paths align with the config.
+
+---
+
 ## Project Layout
 ```
 configs/

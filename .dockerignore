@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.swp
+.cache/
+.venv/
+.git/
+.gitignore
+outputs/
+cache/
+data/working/
