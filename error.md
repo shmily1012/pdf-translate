@@ -10,4 +10,4 @@ Traceback (most recent call last):
                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/app/src/pdf_translate/pipeline_a.py", line 62, in _convert_pdf_to_pptx
     raise FileNotFoundError(f"Expected converted PPTX at {pptx_path}")
-FileNotFoundError: Expected converted PPTX at data/working/PS1101_245TB_AtomosP_E3_L_PDFSS_250715_R2_ocr.pptx
+FileNotFoundError: Expected converted PPTX at data/working/PS1101_245TB_AtomosP_E3_L_PDFSS_250715_R2_ocr.pptx15234

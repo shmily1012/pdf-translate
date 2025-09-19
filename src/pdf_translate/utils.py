@@ -14,7 +14,7 @@ class CommandError(RuntimeError):
         self.stderr = stderr
 
 
-def run_command(args: Sequence[str], cwd: Path | None = None) -> None:
+def run_command(args: Sequence[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
     process = subprocess.run(
         args,
         cwd=str(cwd) if cwd else None,
@@ -25,6 +25,7 @@ def run_command(args: Sequence[str], cwd: Path | None = None) -> None:
     )
     if process.returncode != 0:
         raise CommandError(args, process.returncode, process.stderr)
+    return process
 
 
 def ensure_parent(path: Path) -> None:

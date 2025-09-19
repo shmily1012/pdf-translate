@@ -46,7 +46,8 @@ class PipelineA:
     def _convert_pdf_to_pptx(self, pdf_path: Path) -> Path:
         logger.info("Converting %s to PPTX via LibreOffice", pdf_path)
         ensure_parent(self.work_dir / "dummy")
-        run_command(
+        before = {path.name for path in self.work_dir.iterdir() if path.suffix.lower().startswith(".ppt")}
+        proc = run_command(
             [
                 "soffice",
                 "--headless",
@@ -57,9 +58,14 @@ class PipelineA:
                 str(self.work_dir),
             ]
         )
-        pptx_path = self.work_dir / f"{pdf_path.stem}.pptx"
-        if not pptx_path.exists():
-            raise FileNotFoundError(f"Expected converted PPTX at {pptx_path}")
+        pptx_path = self._select_output_file(
+            suffix_hint=".pptx",
+            stem=pdf_path.stem,
+            before=before,
+            process_stdout=proc.stdout,
+            process_stderr=proc.stderr,
+        )
+        logger.debug("Selected PPTX output %s", pptx_path)
         return pptx_path
 
     def _translate_pptx(self, pptx_path: Path) -> Path:
@@ -77,7 +83,10 @@ class PipelineA:
     def _export_pdf(self, pptx_path: Path) -> Path:
         ensure_parent(self.config.output_pdf)
         logger.info("Exporting translated PPTX %s to PDF", pptx_path)
-        run_command(
+        ensure_parent(self.config.output_pdf)
+        output_dir = self.config.output_pdf.parent
+        before = {path.name for path in output_dir.iterdir() if path.suffix.lower().startswith(".pdf")}
+        proc = run_command(
             [
                 "soffice",
                 "--headless",
@@ -85,15 +94,56 @@ class PipelineA:
                 "pdf",
                 str(pptx_path),
                 "--outdir",
-                str(self.config.output_pdf.parent),
+                str(output_dir),
             ]
         )
-        output_pdf = self.config.output_pdf.parent / f"{pptx_path.stem}.pdf"
+        output_pdf = self._select_output_file(
+            suffix_hint=".pdf",
+            stem=pptx_path.stem,
+            before=before,
+            directory=output_dir,
+            process_stdout=proc.stdout,
+            process_stderr=proc.stderr,
+        )
         if output_pdf != self.config.output_pdf:
             if self.config.output_pdf.exists():
                 self.config.output_pdf.unlink()
             output_pdf.replace(self.config.output_pdf)
         return self.config.output_pdf
+
+    def _select_output_file(
+        self,
+        suffix_hint: str,
+        stem: str,
+        before: set[str],
+        process_stdout: str,
+        process_stderr: str,
+        directory: Path | None = None,
+    ) -> Path:
+        directory = directory or self.work_dir
+        suffix_hint_lower = suffix_hint.lower()
+        candidates = []
+        for path in directory.iterdir():
+            if path.name in before:
+                continue
+            name_lower = path.name.lower()
+            if stem.lower() in name_lower and suffix_hint_lower in name_lower:
+                candidates.append(path)
+        if not candidates:
+            for path in directory.iterdir():
+                if path.name in before:
+                    continue
+                if suffix_hint_lower in path.name.lower():
+                    candidates.append(path)
+
+        if not candidates:
+            detail = process_stderr.strip() or process_stdout.strip() or "no output captured"
+            raise FileNotFoundError(
+                f"LibreOffice did not create an output file matching '{suffix_hint}' for {stem}: {detail}"
+            )
+
+        candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        return candidates[0]
 
     def _collect_paragraphs(self, presentation: Presentation) -> List[ParagraphHandle]:
         handles: List[ParagraphHandle] = []
