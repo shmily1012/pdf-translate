@@ -26,6 +26,16 @@ def _has_hangul(text: str) -> bool:
     return any("\uac00" <= ch <= "\ud7a3" for ch in text)
 
 
+def _sample_preview(texts: List[str], limit: int = 40, max_items: int = 3) -> str:
+    sample = []
+    for text in texts[:max_items]:
+        collapsed = " ".join(text.split())
+        if len(collapsed) > limit:
+            collapsed = f"{collapsed[:limit]}…"
+        sample.append(collapsed)
+    return ", ".join(sample)
+
+
 class PipelineA:
     def __init__(self, config: AppConfig, translator: TranslationClient, work_dir: Path | None = None) -> None:
         self.config = config
@@ -73,7 +83,12 @@ class PipelineA:
         presentation = Presentation(str(pptx_path))
         handles = self._collect_paragraphs(presentation)
         texts = [handle.text for handle in handles]
+        logger.info("Identified %d paragraphs containing Hangul", len(texts))
+        if texts:
+            logger.debug("Sample source paragraphs: %s", _sample_preview(texts))
         translations = self.translator.translate_batch(texts)
+        if translations:
+            logger.debug("Sample translated paragraphs: %s", _sample_preview(translations))
         for handle, translation in zip(handles, translations):
             self._apply_translation(handle, translation)
         translated_path = self.work_dir / f"{pptx_path.stem}_translated.pptx"

@@ -26,6 +26,16 @@ class TextBlock:
     bbox: tuple[float, float, float, float]
 
 
+def _sample_preview(texts: List[str], limit: int = 40, max_items: int = 3) -> str:
+    sample = []
+    for text in texts[:max_items]:
+        collapsed = " ".join(text.split())
+        if len(collapsed) > limit:
+            collapsed = f"{collapsed[:limit]}…"
+        sample.append(collapsed)
+    return ", ".join(sample)
+
+
 class PipelineB:
     def __init__(self, config: AppConfig, translator: TranslationClient, work_dir: Path | None = None) -> None:
         self.config = config
@@ -40,7 +50,12 @@ class PipelineB:
 
         doc = fitz.open(str(source_pdf))
         blocks = self._extract_blocks(doc)
+        logger.info("Identified %d text blocks containing Hangul", len(blocks))
+        if blocks:
+            logger.debug("Sample source blocks: %s", _sample_preview([block.text for block in blocks]))
         translations = self.translator.translate_batch([block.text for block in blocks])
+        if translations:
+            logger.debug("Sample translated blocks: %s", _sample_preview(translations))
         overlay_pdf = self._create_overlay(doc, blocks, translations)
         output = self._merge_overlay(source_pdf, overlay_pdf)
         return output

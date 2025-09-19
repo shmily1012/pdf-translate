@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Iterable, List, Sequence
+from typing import List, Sequence
 
 from .cache import TranslationCache
 
@@ -43,6 +43,11 @@ class TranslationClient:
             self._mode = "legacy"
 
     def translate_batch(self, texts: Sequence[str]) -> List[str]:
+        total = len(texts)
+        if not total:
+            logger.debug("translate_batch called with empty input")
+            return []
+
         results: List[str] = []
         remaining: List[str] = []
         missing_indices: List[int] = []
@@ -56,10 +61,25 @@ class TranslationClient:
                 remaining.append(text)
                 missing_indices.append(idx)
 
+        cache_hits = total - len(remaining)
+        if cache_hits:
+            logger.debug("Cache hit for %d/%d chunks", cache_hits, total)
+
         if remaining:
-            logger.info("Translating %d text chunks", len(remaining))
+            logger.info(
+                "Translating %d/%d text chunks (batch size=%d)",
+                len(remaining),
+                total,
+                self.batch_size,
+            )
             for start in range(0, len(remaining), self.batch_size):
                 batch = remaining[start : start + self.batch_size]
+                logger.debug(
+                    "Sending batch %d containing %d chunks: %s",
+                    (start // self.batch_size) + 1,
+                    len(batch),
+                    ", ".join(_preview(text) for text in batch),
+                )
                 translations = [self._translate_single(text) for text in batch]
                 for text, translation in zip(batch, translations):
                     if self.cache:
@@ -67,13 +87,17 @@ class TranslationClient:
                 for rel_idx, translation in enumerate(translations):
                     absolute_idx = missing_indices[start + rel_idx]
                     results[absolute_idx] = translation
+        else:
+            logger.info("All %d chunks served from cache", total)
 
         if self.cache:
             self.cache.save()
+            logger.debug("Translation cache persisted to %s", self.cache.path)
 
         return results
 
     def _translate_single(self, text: str) -> str:
+        logger.debug("Requesting translation for: %s", _preview(text, limit=120))
         if self._mode == "new":
             response = self._client.chat.completions.create(
                 model=self.model,
@@ -83,14 +107,24 @@ class TranslationClient:
                 ],
                 temperature=0,
             )
-            return response.choices[0].message.content.strip()
+            translation = response.choices[0].message.content.strip()
+        else:
+            response = self._client.ChatCompletion.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": self.system_prompt},
+                    {"role": "user", "content": text},
+                ],
+                temperature=0,
+            )
+            translation = response["choices"][0]["message"]["content"].strip()
 
-        response = self._client.ChatCompletion.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": text},
-            ],
-            temperature=0,
-        )
-        return response["choices"][0]["message"]["content"].strip()
+        logger.debug("Received translation: %s", _preview(translation, limit=120))
+        return translation
+
+
+def _preview(text: str, limit: int = 60) -> str:
+    cleaned = " ".join(text.split())
+    if len(cleaned) <= limit:
+        return cleaned
+    return f"{cleaned[:limit]}…"
