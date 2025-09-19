@@ -11,7 +11,7 @@ from pptx import Presentation  # type: ignore
 from .config import AppConfig
 from .ocr import ensure_searchable_pdf
 from .translation import TranslationClient
-from .utils import ensure_parent, run_command
+from .utils import ensure_parent, run_command, clean_directory
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class PipelineA:
     def __init__(self, config: AppConfig, translator: TranslationClient, work_dir: Path | None = None) -> None:
         self.config = config
         self.translator = translator
-        self.work_dir = work_dir or Path("data/working")
+        self.work_dir = work_dir or config.working_dir
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
     def run(self) -> Path:
@@ -51,6 +51,9 @@ class PipelineA:
         pptx_path = self._convert_pdf_to_pptx(source_pdf)
         translated_pptx = self._translate_pptx(pptx_path)
         output_pdf = self._export_pdf(translated_pptx)
+        if self.config.cleanup_working:
+            logger.debug("Cleaning working directory %s", self.work_dir)
+            clean_directory(self.work_dir)
         return output_pdf
 
     def _convert_pdf_to_pptx(self, pdf_path: Path) -> Path:

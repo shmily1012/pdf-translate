@@ -14,7 +14,7 @@ from reportlab.pdfgen import canvas
 from .config import AppConfig
 from .ocr import ensure_searchable_pdf
 from .translation import TranslationClient
-from .utils import ensure_parent
+from .utils import ensure_parent, clean_directory
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class PipelineB:
     def __init__(self, config: AppConfig, translator: TranslationClient, work_dir: Path | None = None) -> None:
         self.config = config
         self.translator = translator
-        self.work_dir = work_dir or Path("data/working")
+        self.work_dir = work_dir or config.working_dir
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
     def run(self) -> Path:
@@ -58,6 +58,9 @@ class PipelineB:
             logger.debug("Sample translated blocks: %s", _sample_preview(translations))
         overlay_pdf = self._create_overlay(doc, blocks, translations)
         output = self._merge_overlay(source_pdf, overlay_pdf)
+        if self.config.cleanup_working:
+            logger.debug("Cleaning working directory %s", self.work_dir)
+            clean_directory(self.work_dir)
         return output
 
     def _extract_blocks(self, doc: fitz.Document) -> List[TextBlock]:

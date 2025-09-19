@@ -36,6 +36,8 @@ class AppConfig:
     ocr: OCRConfig
     translate: TranslateConfig
     layout: LayoutConfig
+    working_dir: Path
+    cleanup_working: bool
 
     @property
     def translate_cache_path(self) -> Path:
@@ -85,6 +87,9 @@ def load_config(path: Path) -> AppConfig:
     translate = _build_translate_config(data.get("translate", {}))
     layout = _build_layout_config(data.get("layout", {}))
 
+    working = Path(data.get("working_dir", "data/working"))
+    cleanup = bool(data.get("cleanup_working", False))
+
     return AppConfig(
         pipeline=pipeline,
         input_pdf=Path(input_pdf),
@@ -92,6 +97,8 @@ def load_config(path: Path) -> AppConfig:
         ocr=ocr,
         translate=translate,
         layout=layout,
+        working_dir=working,
+        cleanup_working=cleanup,
     )
 
 

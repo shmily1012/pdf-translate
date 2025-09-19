@@ -92,6 +92,8 @@ Edit `configs/config.yaml` to point to your files and environment. Important key
 
 - `pipeline`: choose `A` for PPTX editing or `B` for overlay rendering.
 - `input_pdf` / `output_pdf`: source PDF to translate and destination path for the final result.
+- `working_dir`: scratch space used for OCR output, PPTX conversions, overlays.
+- `cleanup_working`: set to `true` to remove temporary files in `working_dir` after a successful run.
 - `ocr.enabled`: set to `true` if the PDF may contain scans; disable to skip the OCR step.
 - `translate.api_base` / `model` / `batch_size`: connection details for the local vLLM server.
 - `translate.cache`: location for the translation cache JSON file.

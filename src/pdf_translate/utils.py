@@ -1,9 +1,10 @@
 """Utility helpers for running shell commands and working with files."""
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
-from typing import List, Sequence
+from typing import Sequence
 
 
 class CommandError(RuntimeError):
@@ -30,3 +31,13 @@ def run_command(args: Sequence[str], cwd: Path | None = None) -> subprocess.Comp
 
 def ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def clean_directory(path: Path) -> None:
+    if not path.exists():
+        return
+    for item in path.iterdir():
+        if item.is_dir():
+            shutil.rmtree(item)
+        else:
+            item.unlink()
