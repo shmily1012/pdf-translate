@@ -9,11 +9,14 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         build-essential \
         libreoffice \
+        libreoffice-impress \
+        libreoffice-draw \
         ocrmypdf \
         poppler-utils \
         tesseract-ocr \
         tesseract-ocr-kor \
         fonts-noto-cjk \
+        default-jre-headless \
         libqpdf-dev \
         libxml2-dev \
         libxslt1-dev \
