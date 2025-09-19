@@ -1,4 +1,4 @@
-pipeline: A
+pipeline: B
 input_pdf: data/PS1101_245TB_AtomosP_E3_L_PDFSS_250715_R2.pdf
 output_pdf: outputs/PS1101_245TB_AtomosP_E3_L_PDFSS_250715_R2_translated.pdf
 working_dir: data/working
