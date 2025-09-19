@@ -99,9 +99,7 @@ class TranslationClient:
     def _translate_single(self, text: str) -> str:
         logger.debug("Requesting translation for: %s", _preview(text, limit=120))
         if self._mode == "new":
-            print(f'{self.model=}')
-            print(f'{self._client.api_key=}')
-            print(f'{self._client.base_url=}')
+
             response = self._client.chat.completions.create(
                 model=self.model,
                 messages=[
