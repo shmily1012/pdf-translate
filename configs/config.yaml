@@ -1,0 +1,17 @@
+pipeline: A
+input_pdf: data/input.pdf
+output_pdf: outputs/translated.pdf
+
+ocr:
+  enabled: true
+  lang: kor+eng
+
+translate:
+  api_base: http://localhost:8000/v1
+  model: qwen2.5-7b-instruct
+  batch_size: 10
+  cache: cache/translations.json
+
+layout:
+  overflow_shrink_pct: 10
+  font: Noto Sans

@@ -1,0 +1,11 @@
+openai
+ocrmypdf
+PyMuPDF
+pdfminer.six
+pdf2docx
+python-pptx
+python-docx
+pikepdf
+reportlab
+pillow
+pyyaml

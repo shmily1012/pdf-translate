@@ -1,0 +1,23 @@
+[project]
+name = "pdf-translate"
+version = "0.1.0"
+description = "Local pipeline to translate Korean PDFs to English via vLLM while preserving layout."
+authors = [{ name = "Local User" }]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "openai",
+  "ocrmypdf",
+  "PyMuPDF",
+  "pdfminer.six",
+  "pdf2docx",
+  "python-pptx",
+  "python-docx",
+  "pikepdf",
+  "reportlab",
+  "pillow",
+  "pyyaml",
+]
+
+[project.scripts]
+pdf-translate = "pdf_translate.cli:main"

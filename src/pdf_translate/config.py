@@ -1,0 +1,99 @@
+"""Configuration loading for the PDF translation pipeline."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+import yaml
+
+
+@dataclass
+class OCRConfig:
+    enabled: bool = True
+    lang: str = "kor+eng"
+
+
+@dataclass
+class TranslateConfig:
+    api_base: str = "http://localhost:8000/v1"
+    model: str = "qwen2.5-7b-instruct"
+    batch_size: int = 10
+    cache: str = "cache/translations.json"
+
+
+@dataclass
+class LayoutConfig:
+    overflow_shrink_pct: int = 10
+    font: str = "Noto Sans"
+
+
+@dataclass
+class AppConfig:
+    pipeline: str
+    input_pdf: Path
+    output_pdf: Path
+    ocr: OCRConfig
+    translate: TranslateConfig
+    layout: LayoutConfig
+
+    @property
+    def translate_cache_path(self) -> Path:
+        return Path(self.translate.cache)
+
+
+def _load_yaml(path: Path) -> Dict[str, Any]:
+    with path.open("r", encoding="utf-8") as fp:
+        return yaml.safe_load(fp) or {}
+
+
+def _build_ocr_config(data: Dict[str, Any]) -> OCRConfig:
+    return OCRConfig(
+        enabled=bool(data.get("enabled", True)),
+        lang=str(data.get("lang", "kor+eng")),
+    )
+
+
+def _build_translate_config(data: Dict[str, Any]) -> TranslateConfig:
+    return TranslateConfig(
+        api_base=str(data.get("api_base", "http://localhost:8000/v1")),
+        model=str(data.get("model", "qwen2.5-7b-instruct")),
+        batch_size=int(data.get("batch_size", 10)),
+        cache=str(data.get("cache", "cache/translations.json")),
+    )
+
+
+def _build_layout_config(data: Dict[str, Any]) -> LayoutConfig:
+    return LayoutConfig(
+        overflow_shrink_pct=int(data.get("overflow_shrink_pct", 10)),
+        font=str(data.get("font", "Noto Sans")),
+    )
+
+
+def load_config(path: Path) -> AppConfig:
+    data = _load_yaml(path)
+    pipeline = str(data.get("pipeline", "A")).upper()
+    if pipeline not in {"A", "B"}:
+        raise ValueError("pipeline must be 'A' or 'B'")
+
+    input_pdf = data.get("input_pdf")
+    output_pdf = data.get("output_pdf")
+    if not input_pdf or not output_pdf:
+        raise ValueError("config must specify input_pdf and output_pdf")
+
+    ocr = _build_ocr_config(data.get("ocr", {}))
+    translate = _build_translate_config(data.get("translate", {}))
+    layout = _build_layout_config(data.get("layout", {}))
+
+    return AppConfig(
+        pipeline=pipeline,
+        input_pdf=Path(input_pdf),
+        output_pdf=Path(output_pdf),
+        ocr=ocr,
+        translate=translate,
+        layout=layout,
+    )
+
+
+def load_config_from_file(path: str | Path) -> AppConfig:
+    return load_config(Path(path))
