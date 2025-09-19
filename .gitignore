@@ -2,3 +2,5 @@ data/*
 src/pdf_translate/__pycache__/*
 *.pyc
 src/pdf_translate.egg-info/*
+outputs/
+cache/
