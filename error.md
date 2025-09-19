@@ -10,6 +10,11 @@ Traceback (most recent call last):
   File "/app/src/pdf_translate/pipeline_a.py", line 41, in run
     pptx_path = self._convert_pdf_to_pptx(source_pdf)
                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/app/src/pdf_translate/pipeline_a.py", line 62, in _convert_pdf_to_pptx
-    raise FileNotFoundError(f"Expected converted PPTX at {pptx_path}")
-FileNotFoundError: Expected converted PPTX at data/working/PS1101_245TB_AtomosP_E3_L_PDFSS_250715_R2_ocr.pptx
+  File "/app/src/pdf_translate/pipeline_a.py", line 61, in _convert_pdf_to_pptx
+    pptx_path = self._select_output_file(
+                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/pdf_translate/pipeline_a.py", line 141, in _select_output_file
+    raise FileNotFoundError(
+FileNotFoundError: LibreOffice did not create an output file matching '.pptx' for PS1101_245TB_AtomosP_E3_L_PDFSS_250715_R2_ocr: Warning: failed to launch javaldx - java may not function correctly
+Error: no export filter for /app/data/working/PS1101_245TB_AtomosP_E3_L_PDFSS_250715_R2_ocr.pptx found, aborting.
+Error: no export filter
