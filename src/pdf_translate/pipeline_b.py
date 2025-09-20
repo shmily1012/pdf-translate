@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List
@@ -25,6 +26,8 @@ class TextBlock:
     page: int
     text: str
     bbox: tuple[float, float, float, float]
+    font_size: float
+    font_name: str | None = None
 
 
 def _sample_preview(texts: List[str], limit: int = 40, max_items: int = 3) -> str:
@@ -68,26 +71,29 @@ class PipelineB:
         blocks: List[TextBlock] = []
         with pdfplumber.open(str(pdf_path)) as pdf:
             for page_index, page in enumerate(pdf.pages):
-                words = page.extract_words(use_text_flow=True, keep_blank_chars=False)
-                if not words:
+                chars = page.chars
+                if not chars:
                     continue
-                grouped = self._group_words_by_line(words)
-                for line in grouped:
-                    text = line["text"].strip()
-                    if not text:
+                lines = self._group_chars_into_lines(chars)
+                for line_chars in lines:
+                    text = self._compose_text(line_chars)
+                    if not text.strip():
                         continue
                     if not self._has_hangul(text):
                         continue
+                    x0 = min(float(ch["x0"]) for ch in line_chars)
+                    y0 = min(float(ch["top"]) for ch in line_chars)
+                    x1 = max(float(ch["x1"]) for ch in line_chars)
+                    y1 = max(float(ch["bottom"]) for ch in line_chars)
+                    avg_size = sum(float(ch.get("size", 0)) for ch in line_chars) / len(line_chars)
+                    font_name = self._dominant_font(line_chars)
                     blocks.append(
                         TextBlock(
                             page=page_index,
-                            text=text,
-                            bbox=(
-                                float(line["x0"]),
-                                float(line["top"]),
-                                float(line["x1"]),
-                                float(line["bottom"]),
-                            ),
+                            text=text.strip(),
+                            bbox=(x0, y0, x1, y1),
+                            font_size=avg_size,
+                            font_name=font_name,
                         )
                     )
         logger.info("Collected %d text blocks for translation", len(blocks))
@@ -99,7 +105,7 @@ class PipelineB:
         canvas_obj = canvas.Canvas(str(overlay_path))
         font_name = self._resolve_font(self.config.layout.font)
 
-        grouped: Dict[int, List[tuple[TextBlock, str]]] = {}
+        grouped: Dict[int, List[tuple[TextBlock, str]]] = defaultdict(list)
         for block, translated in zip(blocks, translations):
             grouped.setdefault(block.page, []).append((block, translated))
 
@@ -169,7 +175,7 @@ class PipelineB:
             canvas_obj.restoreState()
         lines = translated.splitlines() or [translated]
         line_count = max(1, len(lines))
-        base_font_size = block_height / line_count
+        base_font_size = block.font_size if block.font_size else block_height / line_count
         shrink_factor = 1.0 - (self.config.layout.overflow_shrink_pct / 100.0)
         font_size = max(6, base_font_size * shrink_factor)
         line_height = font_size * 1.1
@@ -243,3 +249,46 @@ class PipelineB:
         except Exception:
             logger.warning("Invalid background color %s; ignoring", value)
             return None
+
+    @staticmethod
+    def _group_chars_into_lines(chars: List[dict], tolerance: float = 2.0) -> List[List[dict]]:
+        if not chars:
+            return []
+        sorted_chars = sorted(chars, key=lambda ch: (ch["top"], ch["x0"]))
+        lines: List[List[dict]] = []
+        current: List[dict] = []
+        current_top = None
+        for ch in sorted_chars:
+            top = ch["top"]
+            if current and abs(top - current_top) > tolerance:
+                lines.append(current)
+                current = []
+            if not current:
+                current_top = top
+            current.append(ch)
+        if current:
+            lines.append(current)
+        return lines
+
+    @staticmethod
+    def _compose_text(line_chars: List[dict], gap_ratio: float = 0.15) -> str:
+        if not line_chars:
+            return ""
+        line_chars = sorted(line_chars, key=lambda ch: ch["x0"])
+        pieces: List[str] = []
+        last_x1 = None
+        avg_width = sum((ch["x1"] - ch["x0"]) for ch in line_chars) / max(len(line_chars), 1)
+        for ch in line_chars:
+            if last_x1 is not None and (ch["x0"] - last_x1) > avg_width * gap_ratio:
+                pieces.append(" ")
+            pieces.append(ch.get("text", ""))
+            last_x1 = ch["x1"]
+        return "".join(pieces)
+
+    @staticmethod
+    def _dominant_font(line_chars: List[dict]) -> str | None:
+        fonts = [ch.get("fontname") for ch in line_chars if ch.get("fontname")]
+        if not fonts:
+            return None
+        most_common, _ = Counter(fonts).most_common(1)[0]
+        return most_common
