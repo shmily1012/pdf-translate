@@ -8,7 +8,10 @@ from pathlib import Path
 from typing import List
 
 from pptx import Presentation  # type: ignore
-from pdf2pptx import Converter  # type: ignore
+try:
+    from pdf2pptx import Converter  # type: ignore
+except ImportError:  # pragma: no cover - optional dependency
+    Converter = None
 
 from .config import AppConfig
 from .ocr import ensure_searchable_pdf
@@ -70,6 +73,11 @@ class PipelineA:
 
     def _convert_pdf_to_pptx(self, pdf_path: Path) -> Path:
         logger.info("Converting %s to PPTX via pdf2pptx", pdf_path)
+        if Converter is None:
+            raise RuntimeError(
+                "pdf2pptx is not installed. Install optional dependency with "
+                "'pip install pdf2pptx PyMuPDF' to enable Pipeline A conversion."
+            )
         if pdf_path.suffix.lower() == ".pptx":
             target = self.work_dir / pdf_path.name
             shutil.copy2(pdf_path, target)

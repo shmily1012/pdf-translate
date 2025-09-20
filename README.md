@@ -20,8 +20,9 @@ Install these system tools before using the project:
 
 - Linux environment with Python 3.10+
 - [ocrmypdf](https://ocrmypdf.readthedocs.io/) with the `kor+eng` language pack (available via `apt`, `brew`, or `pip`)
-- `poppler-utils` (provides the rendering backend used by `pdf2pptx` and `pdfplumber`)
-- [pdf2pptx](https://pypi.org/project/pdf2pptx/) and [pdfplumber](https://github.com/jsvine/pdfplumber) Python dependencies (installed via pip; both require Poppler)
+- `poppler-utils` (provides the rendering backend used by `pdfplumber`)
+- [pdfplumber](https://github.com/jsvine/pdfplumber) Python dependency (installed via pip; requires Poppler)
+- Optional for Pipeline A conversion: `pdf2pptx` + `PyMuPDF` (install manually if you need automatic PDF→PPTX conversion)
 - [vLLM](https://vllm.ai/) running locally and exposing an OpenAI-compatible HTTP endpoint (for example `http://localhost:8000/v1`)
 - Optional but recommended: Noto Sans / Noto Serif fonts for cleaner English overlay output (Pipeline B)
 
@@ -121,7 +122,8 @@ pdf-translate --config configs/config.yaml
 Logs show each stage (OCR, conversion, translation, export). When the command finishes, the translated PDF is written to `output_pdf` from the config.
 
 ### Pipeline A tips
-- The conversion uses `pdf2pptx`, which may flatten complex effects; inspect the generated PPTX (saved alongside your PDF) and adjust text boxes if needed.
+- Automatic PDF→PPTX conversion requires `pdf2pptx` and `PyMuPDF`, which are optional dependencies. Install them manually if needed (`pip install pdf2pptx PyMuPDF`).
+- The conversion may flatten complex effects; inspect the generated PPTX (saved alongside your PDF) and adjust text boxes if needed.
 - Intermediate `.pptx` files remain in `data/working`; you can open them with PowerPoint/Keynote/etc. to verify changes before delivery.
 
 ### Pipeline B tips
