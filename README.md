@@ -3,7 +3,7 @@
 Translate Korean PDF slide decks into English on an air-gapped Linux machine while keeping the slides readable. The tool wraps the end-to-end workflow described in the design doc and offers two interchangeable pipelines:
 
 * **Pipeline A (default)** – Convert PDF → PPTX with `pdf2pptx`, replace Korean text with English in-place, save a translated PPTX, and optionally generate the final PDF through the overlay flow. Best when you want an editable slide deck alongside the PDF output.
-* **Pipeline B** – Keep the original PDF intact and draw translated text on a transparent overlay. Best when layout fidelity matters more than editability.
+* **Pipeline B** – Keep the original PDF intact and draw translated text on a transparent overlay (now powered by `pdfplumber` for extraction). Best when layout fidelity matters more than editability.
 
 ---
 
@@ -20,8 +20,8 @@ Install these system tools before using the project:
 
 - Linux environment with Python 3.10+
 - [ocrmypdf](https://ocrmypdf.readthedocs.io/) with the `kor+eng` language pack (available via `apt`, `brew`, or `pip`)
-- `poppler-utils` (provides the rendering backend used by `pdf2pptx`)
-- [pdf2pptx](https://pypi.org/project/pdf2pptx/) Python dependency (installed via pip; requires `poppler` under the hood)
+- `poppler-utils` (provides the rendering backend used by `pdf2pptx` and `pdfplumber`)
+- [pdf2pptx](https://pypi.org/project/pdf2pptx/) and [pdfplumber](https://github.com/jsvine/pdfplumber) Python dependencies (installed via pip; both require Poppler)
 - [vLLM](https://vllm.ai/) running locally and exposing an OpenAI-compatible HTTP endpoint (for example `http://localhost:8000/v1`)
 - Optional but recommended: Noto Sans / Noto Serif fonts for cleaner English overlay output (Pipeline B)
 

@@ -1,6 +1,6 @@
 openai
 ocrmypdf
-PyMuPDF
+pdfplumber
 pdfminer.six
 pdf2docx
 pdf2pptx

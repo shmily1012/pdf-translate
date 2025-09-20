@@ -4,9 +4,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+from typing import Dict, List
 
-import fitz  # PyMuPDF
+import pdfplumber
 from pikepdf import Pdf
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
@@ -50,48 +50,64 @@ class PipelineB:
         if self.config.ocr.enabled:
             source_pdf = ensure_searchable_pdf(source_pdf, self.config.ocr.lang, self.work_dir)
 
-        doc = fitz.open(str(source_pdf))
-        blocks = self._extract_blocks(doc)
+        blocks = self._extract_blocks(source_pdf)
         logger.info("Identified %d text blocks containing Hangul", len(blocks))
         if blocks:
             logger.debug("Sample source blocks: %s", _sample_preview([block.text for block in blocks]))
         translations = self.translator.translate_batch([block.text for block in blocks], progress=True)
         if translations:
             logger.debug("Sample translated blocks: %s", _sample_preview(translations))
-        overlay_pdf = self._create_overlay(doc, blocks, translations)
+        overlay_pdf = self._create_overlay(blocks, translations)
         output = self._merge_overlay(source_pdf, overlay_pdf)
         if self.config.cleanup_working:
             logger.debug("Cleaning working directory %s", self.work_dir)
             clean_directory(self.work_dir)
         return output
 
-    def _extract_blocks(self, doc: fitz.Document) -> List[TextBlock]:
+    def _extract_blocks(self, pdf_path: Path) -> List[TextBlock]:
         blocks: List[TextBlock] = []
-        for page_index, page in enumerate(doc):
-            for block in page.get_text("blocks"):
-                x0, y0, x1, y1, text, block_no, block_type = block
-                if not text.strip():
+        with pdfplumber.open(str(pdf_path)) as pdf:
+            for page_index, page in enumerate(pdf.pages):
+                words = page.extract_words(use_text_flow=True, keep_blank_chars=False)
+                if not words:
                     continue
-                if block_type != 0:
-                    continue
-                if not self._has_hangul(text):
-                    continue
-                blocks.append(TextBlock(page=page_index, text=text.strip(), bbox=(x0, y0, x1, y1)))
+                grouped = self._group_words_by_line(words)
+                for line in grouped:
+                    text = line["text"].strip()
+                    if not text:
+                        continue
+                    if not self._has_hangul(text):
+                        continue
+                    blocks.append(
+                        TextBlock(
+                            page=page_index,
+                            text=text,
+                            bbox=(
+                                float(line["x0"]),
+                                float(line["top"]),
+                                float(line["x1"]),
+                                float(line["bottom"]),
+                            ),
+                        )
+                    )
         logger.info("Collected %d text blocks for translation", len(blocks))
         return blocks
 
-    def _create_overlay(self, doc: fitz.Document, blocks: List[TextBlock], translations: List[str]) -> Path:
+    def _create_overlay(self, blocks: List[TextBlock], translations: List[str]) -> Path:
         overlay_path = self.work_dir / "overlay.pdf"
         ensure_parent(overlay_path)
         canvas_obj = canvas.Canvas(str(overlay_path))
         font_name = self._resolve_font(self.config.layout.font)
 
-        grouped: dict[int, List[tuple[TextBlock, str]]] = {}
+        grouped: Dict[int, List[tuple[TextBlock, str]]] = {}
         for block, translated in zip(blocks, translations):
             grouped.setdefault(block.page, []).append((block, translated))
 
-        for page_index, page in enumerate(doc):
-            width, height = page.rect.width, page.rect.height
+        # Determine page sizes via pdfplumber to ensure alignment
+        with pdfplumber.open(str(self.config.input_pdf)) as pdf:
+            page_sizes = [ (page.width, page.height) for page in pdf.pages ]
+
+        for page_index, (width, height) in enumerate(page_sizes):
             canvas_obj.setPageSize((width, height))
             for block, translated in grouped.get(page_index, []):
                 self._draw_block(canvas_obj, block, translated, font_name, height)
@@ -99,6 +115,41 @@ class PipelineB:
 
         canvas_obj.save()
         return overlay_path
+
+    @staticmethod
+    def _group_words_by_line(words: List[dict]) -> List[dict]:
+        grouped: List[dict] = []
+        if not words:
+            return grouped
+
+        current_line = {
+            "text": words[0]["text"],
+            "x0": words[0]["x0"],
+            "x1": words[0]["x1"],
+            "top": words[0]["top"],
+            "bottom": words[0]["bottom"],
+        }
+        current_y = words[0]["top"]
+
+        for word in words[1:]:
+            if abs(word["top"] - current_y) <= 2:
+                current_line["text"] += " " + word["text"]
+                current_line["x1"] = word["x1"]
+                current_line["top"] = min(current_line["top"], word["top"])
+                current_line["bottom"] = max(current_line["bottom"], word["bottom"])
+            else:
+                grouped.append(current_line)
+                current_line = {
+                    "text": word["text"],
+                    "x0": word["x0"],
+                    "x1": word["x1"],
+                    "top": word["top"],
+                    "bottom": word["bottom"],
+                }
+                current_y = word["top"]
+
+        grouped.append(current_line)
+        return grouped
 
     def _draw_block(
         self,
