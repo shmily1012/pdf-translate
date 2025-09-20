@@ -13,6 +13,7 @@ RUN apt-get update && \
         tesseract-ocr \
         tesseract-ocr-kor \
         fonts-noto-cjk \
+        swig \
         libqpdf-dev \
         libxml2-dev \
         libxslt1-dev \
