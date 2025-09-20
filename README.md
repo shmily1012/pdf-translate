@@ -103,6 +103,9 @@ Edit `configs/config.yaml` to point to your files and environment. Important key
 - `layout.overflow_shrink_pct`: how aggressively to shrink font size when overlays would overflow their bounding boxes (Pipeline B).
 - `layout.font`: ReportLab font name or a path to a TTF file used for overlay rendering.
 - `layout.background_color`: optional hex/name color used to paint a rectangle behind translated text in Pipeline B (helps mask the original text when overlays should fully replace Hangul).
+- `layout.background_alpha`: optional alpha (0.0–1.0) applied to the overlay rectangle for translucent highlights.
+- `layout.background_padding_pct`: padding added around each overlay rectangle (percentage of the block size) to soften edges.
+- `layout.text_color`: color used for translated text in Pipeline B.
 
 ---
 

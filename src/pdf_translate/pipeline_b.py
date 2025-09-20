@@ -47,6 +47,9 @@ class PipelineB:
         self.work_dir = work_dir or config.working_dir
         self.work_dir.mkdir(parents=True, exist_ok=True)
         self._background_color = self._prepare_background_color(config.layout.background_color)
+        self._background_alpha = config.layout.background_alpha
+        self._background_padding_pct = max(0.0, config.layout.background_padding_pct)
+        self._text_color = self._prepare_text_color(config.layout.text_color)
 
     def run(self) -> Path:
         source_pdf = self.config.input_path
@@ -169,9 +172,22 @@ class PipelineB:
         block_width = x1 - x0
         block_height = y1 - y0
         if self._background_color and translated.strip():
+            pad_x = block_width * (self._background_padding_pct / 100.0)
+            pad_y = block_height * (self._background_padding_pct / 100.0)
             canvas_obj.saveState()
             canvas_obj.setFillColor(self._background_color)
-            canvas_obj.rect(x0, page_height - y1, block_width, block_height, fill=1, stroke=0)
+            if self._background_alpha is not None and hasattr(canvas_obj, "setFillAlpha"):
+                canvas_obj.setFillAlpha(min(max(self._background_alpha, 0.0), 1.0))
+            canvas_obj.rect(
+                x0 - pad_x,
+                page_height - y1 - pad_y,
+                block_width + pad_x * 2,
+                block_height + pad_y * 2,
+                fill=1,
+                stroke=0,
+            )
+            if self._background_alpha is not None and hasattr(canvas_obj, "setFillAlpha"):
+                canvas_obj.setFillAlpha(1.0)
             canvas_obj.restoreState()
         lines = translated.splitlines() or [translated]
         line_count = max(1, len(lines))
@@ -184,7 +200,7 @@ class PipelineB:
         text_obj = canvas_obj.beginText()
         text_obj.setTextOrigin(x0, y_start)
         text_obj.setFont(font_name, font_size)
-        text_obj.setFillColor(colors.black)
+        text_obj.setFillColor(self._text_color)
         text_obj.setLeading(line_height)
 
         for line in lines:
@@ -249,6 +265,14 @@ class PipelineB:
         except Exception:
             logger.warning("Invalid background color %s; ignoring", value)
             return None
+
+    @staticmethod
+    def _prepare_text_color(value: str) -> colors.Color:
+        try:
+            return colors.toColor(value)
+        except Exception:
+            logger.warning("Invalid text color %s; defaulting to black", value)
+            return colors.black
 
     @staticmethod
     def _group_chars_into_lines(chars: List[dict], tolerance: float = 2.0) -> List[List[dict]]:

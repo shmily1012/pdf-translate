@@ -28,6 +28,9 @@ class LayoutConfig:
     overflow_shrink_pct: int = 10
     font: str = "Noto Sans"
     background_color: Optional[str] = None
+    background_alpha: Optional[float] = None
+    background_padding_pct: float = 0.0
+    text_color: str = "#000000"
 
 
 @dataclass
@@ -72,7 +75,19 @@ def _build_layout_config(data: Dict[str, Any]) -> LayoutConfig:
         overflow_shrink_pct=int(data.get("overflow_shrink_pct", 10)),
         font=str(data.get("font", "Noto Sans")),
         background_color=data.get("background_color"),
+        background_alpha=_parse_optional_float(data.get("background_alpha")),
+        background_padding_pct=float(data.get("background_padding_pct", 0.0)),
+        text_color=str(data.get("text_color", "#000000")),
     )
+
+
+def _parse_optional_float(value: Any) -> Optional[float]:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"Invalid float value: {value}")
 
 
 def load_config(path: Path) -> AppConfig:
