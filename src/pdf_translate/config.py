@@ -27,6 +27,7 @@ class TranslateConfig:
 class LayoutConfig:
     overflow_shrink_pct: int = 10
     font: str = "Noto Sans"
+    background_color: Optional[str] = None
 
 
 @dataclass
@@ -71,6 +72,7 @@ def _build_layout_config(data: Dict[str, Any]) -> LayoutConfig:
     return LayoutConfig(
         overflow_shrink_pct=int(data.get("overflow_shrink_pct", 10)),
         font=str(data.get("font", "Noto Sans")),
+        background_color=data.get("background_color"),
     )
 
 

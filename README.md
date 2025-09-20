@@ -2,7 +2,7 @@
 
 Translate Korean PDF slide decks into English on an air-gapped Linux machine while keeping the slides readable. The tool wraps the end-to-end workflow described in the design doc and offers two interchangeable pipelines:
 
-* **Pipeline A (default)** – Convert PDF → PPTX, replace Korean text with English in-place, and export back to PDF. Best when you want an editable slide deck.
+* **Pipeline A (default)** – Convert PDF → PPTX with `pdf2pptx`, replace Korean text with English in-place, save a translated PPTX, and optionally generate the final PDF through the overlay flow. Best when you want an editable slide deck alongside the PDF output.
 * **Pipeline B** – Keep the original PDF intact and draw translated text on a transparent overlay. Best when layout fidelity matters more than editability.
 
 ---
@@ -19,8 +19,9 @@ Translate Korean PDF slide decks into English on an air-gapped Linux machine whi
 Install these system tools before using the project:
 
 - Linux environment with Python 3.10+
-- [LibreOffice](https://www.libreoffice.org/) (provides the `soffice` CLI used for PDF⇄PPTX conversions)
 - [ocrmypdf](https://ocrmypdf.readthedocs.io/) with the `kor+eng` language pack (available via `apt`, `brew`, or `pip`)
+- `poppler-utils` (provides the rendering backend used by `pdf2pptx`)
+- [pdf2pptx](https://pypi.org/project/pdf2pptx/) Python dependency (installed via pip; requires `poppler` under the hood)
 - [vLLM](https://vllm.ai/) running locally and exposing an OpenAI-compatible HTTP endpoint (for example `http://localhost:8000/v1`)
 - Optional but recommended: Noto Sans / Noto Serif fonts for cleaner English overlay output (Pipeline B)
 
@@ -37,17 +38,17 @@ Install these system tools before using the project:
    ```bash
    pip install -e .
    ```
-3. Verify that the required CLI tools resolve:
+3. Verify that required CLI tools resolve:
    ```bash
-   soffice --version
    ocrmypdf --version
+   tesseract --version
    ```
 4. Start your vLLM server and confirm it answers OpenAI-style requests (see `scripts/translate_api.py` for a quick test script).
 
 ---
 
 ## Docker Option
-Prefer a containerized setup? A `Dockerfile` is provided that bundles LibreOffice, ocrmypdf, Tesseract (with Korean data), fonts, and the Python project.
+Prefer a containerized setup? A `Dockerfile` is provided that bundles ocrmypdf, Tesseract (with Korean data), Poppler, fonts, and the Python project.
 
 1. Build the image from the project root:
    ```bash
@@ -100,6 +101,7 @@ Edit `configs/config.yaml` to point to your files and environment. Important key
 - `translate.cache`: location for the translation cache JSON file.
 - `layout.overflow_shrink_pct`: how aggressively to shrink font size when overlays would overflow their bounding boxes (Pipeline B).
 - `layout.font`: ReportLab font name or a path to a TTF file used for overlay rendering.
+- `layout.background_color`: optional hex/name color used to paint a rectangle behind translated text in Pipeline B (helps mask the original text when overlays should fully replace Hangul).
 
 ---
 
@@ -119,12 +121,13 @@ pdf-translate --config configs/config.yaml
 Logs show each stage (OCR, conversion, translation, export). When the command finishes, the translated PDF is written to `output_pdf` from the config.
 
 ### Pipeline A tips
-- The round trip relies on LibreOffice, so very complex layouts may shift slightly—inspect the PPTX in `data/working` if you need to adjust text boxes manually.
-- Intermediate `.pptx` files remain in `data/working`; you can open them with PowerPoint/LibreOffice to verify changes.
+- The conversion uses `pdf2pptx`, which may flatten complex effects; inspect the generated PPTX (saved alongside your PDF) and adjust text boxes if needed.
+- Intermediate `.pptx` files remain in `data/working`; you can open them with PowerPoint/Keynote/etc. to verify changes before delivery.
 
 ### Pipeline B tips
 - Choose a font that fits your corporate template. You can provide an absolute path to a `.ttf` file in `layout.font` if the font is not pre-registered with ReportLab.
 - If English text wraps poorly, tweak `overflow_shrink_pct` or add manual line breaks in the translation cache.
+- Set `layout.background_color` (for example `"#FFFFFF"`) if you want the translated text to fully cover the original Hangul instead of overlaying transparently.
 
 ---
 
@@ -135,7 +138,7 @@ Logs show each stage (OCR, conversion, translation, export). When the command fi
 ---
 
 ## Troubleshooting
-- **`Command ... not found`** – Ensure `soffice` and `ocrmypdf` are installed and visible in `$PATH`.
+- **`Command ... not found`** – Ensure `ocrmypdf`, `tesseract`, and other required CLIs are installed and visible in `$PATH`.
 - **`Font ... not registered` warnings** – ReportLab could not find the font; install it system-wide or point `layout.font` to a `.ttf` file.
 - **Overlay text overlapping** – Increase `layout.overflow_shrink_pct` or edit the cached translation to add manual line breaks.
 - **Model request failures** – Confirm the vLLM server is running at `translate.api_base` and that it supports chat-completion requests.

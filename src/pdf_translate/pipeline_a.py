@@ -1,17 +1,19 @@
-"""Pipeline A: convert PDF to PPTX, replace text, export back to PDF."""
+"""Pipeline A: convert PDF to PPTX via pdf2pptx, replace text, export results."""
 from __future__ import annotations
 
 import logging
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
 from pptx import Presentation  # type: ignore
+from pdf2pptx import Converter  # type: ignore
 
 from .config import AppConfig
 from .ocr import ensure_searchable_pdf
 from .translation import TranslationClient
-from .utils import ensure_parent, run_command, clean_directory
+from .utils import ensure_parent, clean_directory
 
 logger = logging.getLogger(__name__)
 
@@ -50,35 +52,45 @@ class PipelineA:
 
         pptx_path = self._convert_pdf_to_pptx(source_pdf)
         translated_pptx = self._translate_pptx(pptx_path)
-        output_pdf = self._export_pdf(translated_pptx)
+        self._persist_pptx(translated_pptx)
+
+        output_path = self.config.output_pdf
+        if output_path.suffix.lower() == ".pdf":
+            logger.info("Generating final PDF using overlay pipeline (no LibreOffice)")
+            from .pipeline_b import PipelineB
+
+            overlay_pipeline = PipelineB(self.config, self.translator, work_dir=self.work_dir)
+            output_path = overlay_pipeline.run()
+
         if self.config.cleanup_working:
             logger.debug("Cleaning working directory %s", self.work_dir)
             clean_directory(self.work_dir)
-        return output_pdf
+
+        return output_path
 
     def _convert_pdf_to_pptx(self, pdf_path: Path) -> Path:
-        logger.info("Converting %s to PPTX via LibreOffice", pdf_path)
-        ensure_parent(self.work_dir / "dummy")
-        before = {path.name for path in self.work_dir.iterdir() if path.suffix.lower().startswith(".ppt")}
-        proc = run_command(
-            [
-                "soffice",
-                "--headless",
-                "--convert-to",
-                "pptx:Impress MS PowerPoint 2007 XML",
-                str(pdf_path),
-                "--outdir",
-                str(self.work_dir),
-            ]
-        )
-        pptx_path = self._select_output_file(
-            suffix_hint=".pptx",
-            stem=pdf_path.stem,
-            before=before,
-            process_stdout=proc.stdout,
-            process_stderr=proc.stderr,
-        )
-        logger.debug("Selected PPTX output %s", pptx_path)
+        logger.info("Converting %s to PPTX via pdf2pptx", pdf_path)
+        if pdf_path.suffix.lower() == ".pptx":
+            target = self.work_dir / pdf_path.name
+            shutil.copy2(pdf_path, target)
+            return target
+
+        pptx_path = self.work_dir / f"{pdf_path.stem}.pptx"
+        ensure_parent(pptx_path)
+        if pptx_path.exists() and pptx_path.stat().st_mtime >= pdf_path.stat().st_mtime:
+            logger.info("Using cached PPTX at %s", pptx_path)
+            return pptx_path
+
+        converter = Converter(str(pdf_path))
+        try:
+            converter.convert(str(pptx_path))
+        finally:
+            converter.close()
+
+        if not pptx_path.exists():
+            raise FileNotFoundError(f"pdf2pptx did not create PPTX at {pptx_path}")
+
+        logger.debug("Created PPTX at %s", pptx_path)
         return pptx_path
 
     def _translate_pptx(self, pptx_path: Path) -> Path:
@@ -98,70 +110,16 @@ class PipelineA:
         presentation.save(str(translated_path))
         return translated_path
 
-    def _export_pdf(self, pptx_path: Path) -> Path:
-        ensure_parent(self.config.output_pdf)
-        logger.info("Exporting translated PPTX %s to PDF", pptx_path)
-        ensure_parent(self.config.output_pdf)
-        output_dir = self.config.output_pdf.parent
-        before = {path.name for path in output_dir.iterdir() if path.suffix.lower().startswith(".pdf")}
-        proc = run_command(
-            [
-                "soffice",
-                "--headless",
-                "--convert-to",
-                "pdf:writer_pdf_Export",
-                str(pptx_path),
-                "--outdir",
-                str(output_dir),
-            ]
-        )
-        output_pdf = self._select_output_file(
-            suffix_hint=".pdf",
-            stem=pptx_path.stem,
-            before=before,
-            directory=output_dir,
-            process_stdout=proc.stdout,
-            process_stderr=proc.stderr,
-        )
-        if output_pdf != self.config.output_pdf:
-            if self.config.output_pdf.exists():
-                self.config.output_pdf.unlink()
-            output_pdf.replace(self.config.output_pdf)
-        return self.config.output_pdf
-
-    def _select_output_file(
-        self,
-        suffix_hint: str,
-        stem: str,
-        before: set[str],
-        process_stdout: str,
-        process_stderr: str,
-        directory: Path | None = None,
-    ) -> Path:
-        directory = directory or self.work_dir
-        suffix_hint_lower = suffix_hint.lower()
-        candidates = []
-        for path in directory.iterdir():
-            if path.name in before:
-                continue
-            name_lower = path.name.lower()
-            if stem.lower() in name_lower and suffix_hint_lower in name_lower:
-                candidates.append(path)
-        if not candidates:
-            for path in directory.iterdir():
-                if path.name in before:
-                    continue
-                if suffix_hint_lower in path.name.lower():
-                    candidates.append(path)
-
-        if not candidates:
-            detail = process_stderr.strip() or process_stdout.strip() or "no output captured"
-            raise FileNotFoundError(
-                f"LibreOffice did not create an output file matching '{suffix_hint}' for {stem}: {detail}"
-            )
-
-        candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-        return candidates[0]
+    def _persist_pptx(self, translated_pptx: Path) -> Path:
+        target = self.config.output_pdf
+        if target.suffix.lower() == ".pdf":
+            pptx_target = target.with_suffix(".pptx")
+        else:
+            pptx_target = target
+        ensure_parent(pptx_target)
+        shutil.copy2(translated_pptx, pptx_target)
+        logger.info("Translated PPTX saved to %s", pptx_target)
+        return pptx_target
 
     def _collect_paragraphs(self, presentation: Presentation) -> List[ParagraphHandle]:
         handles: List[ParagraphHandle] = []

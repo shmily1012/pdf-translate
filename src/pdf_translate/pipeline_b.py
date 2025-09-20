@@ -10,6 +10,7 @@ import fitz  # PyMuPDF
 from pikepdf import Pdf
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
+from reportlab.lib import colors
 
 from .config import AppConfig
 from .ocr import ensure_searchable_pdf
@@ -42,6 +43,7 @@ class PipelineB:
         self.translator = translator
         self.work_dir = work_dir or config.working_dir
         self.work_dir.mkdir(parents=True, exist_ok=True)
+        self._background_color = self._prepare_background_color(config.layout.background_color)
 
     def run(self) -> Path:
         source_pdf = self.config.input_pdf
@@ -53,7 +55,7 @@ class PipelineB:
         logger.info("Identified %d text blocks containing Hangul", len(blocks))
         if blocks:
             logger.debug("Sample source blocks: %s", _sample_preview([block.text for block in blocks]))
-        translations = self.translator.translate_batch([block.text for block in blocks])
+        translations = self.translator.translate_batch([block.text for block in blocks], progress=True)
         if translations:
             logger.debug("Sample translated blocks: %s", _sample_preview(translations))
         overlay_pdf = self._create_overlay(doc, blocks, translations)
@@ -109,6 +111,11 @@ class PipelineB:
         x0, y0, x1, y1 = block.bbox
         block_width = x1 - x0
         block_height = y1 - y0
+        if self._background_color and translated.strip():
+            canvas_obj.saveState()
+            canvas_obj.setFillColor(self._background_color)
+            canvas_obj.rect(x0, page_height - y1, block_width, block_height, fill=1, stroke=0)
+            canvas_obj.restoreState()
         lines = translated.splitlines() or [translated]
         line_count = max(1, len(lines))
         base_font_size = block_height / line_count
@@ -120,6 +127,7 @@ class PipelineB:
         text_obj = canvas_obj.beginText()
         text_obj.setTextOrigin(x0, y_start)
         text_obj.setFont(font_name, font_size)
+        text_obj.setFillColor(colors.black)
         text_obj.setLeading(line_height)
 
         for line in lines:
@@ -174,3 +182,13 @@ class PipelineB:
     @staticmethod
     def _has_hangul(text: str) -> bool:
         return any("\uac00" <= ch <= "\ud7a3" for ch in text)
+
+    @staticmethod
+    def _prepare_background_color(value: str | None):
+        if not value:
+            return None
+        try:
+            return colors.toColor(value)
+        except Exception:
+            logger.warning("Invalid background color %s; ignoring", value)
+            return None

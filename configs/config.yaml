@@ -18,3 +18,4 @@ translate:
 layout:
   overflow_shrink_pct: 10
   font: Noto Sans
+  background_color: "#FFFFFF"

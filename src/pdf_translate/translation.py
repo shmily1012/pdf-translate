@@ -42,7 +42,7 @@ class TranslationClient:
             self._client = openai
             self._mode = "legacy"
 
-    def translate_batch(self, texts: Sequence[str]) -> List[str]:
+    def translate_batch(self, texts: Sequence[str], *, progress: bool = False) -> List[str]:
         total = len(texts)
         if not total:
             logger.debug("translate_batch called with empty input")
@@ -64,6 +64,12 @@ class TranslationClient:
         cache_hits = total - len(remaining)
         if cache_hits:
             logger.debug("Cache hit for %d/%d chunks", cache_hits, total)
+
+        pbar = None
+        if progress and remaining:
+            from tqdm import tqdm
+
+            pbar = tqdm(total=len(remaining), desc="Translating", unit="chunk")
 
         if remaining:
             logger.info(
@@ -87,12 +93,17 @@ class TranslationClient:
                 for rel_idx, translation in enumerate(translations):
                     absolute_idx = missing_indices[start + rel_idx]
                     results[absolute_idx] = translation
+                if pbar:
+                    pbar.update(len(batch))
         else:
             logger.info("All %d chunks served from cache", total)
 
         if self.cache:
             self.cache.save()
             logger.debug("Translation cache persisted to %s", self.cache.path)
+
+        if pbar:
+            pbar.close()
 
         return results
 
