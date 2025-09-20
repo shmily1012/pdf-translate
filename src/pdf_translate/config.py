@@ -32,9 +32,8 @@ class LayoutConfig:
 
 @dataclass
 class AppConfig:
-    pipeline: str
-    input_pdf: Path
-    output_pdf: Path
+    input_path: Path
+    output_path: Path
     ocr: OCRConfig
     translate: TranslateConfig
     layout: LayoutConfig
@@ -78,14 +77,11 @@ def _build_layout_config(data: Dict[str, Any]) -> LayoutConfig:
 
 def load_config(path: Path) -> AppConfig:
     data = _load_yaml(path)
-    pipeline = str(data.get("pipeline", "A")).upper()
-    if pipeline not in {"A", "B"}:
-        raise ValueError("pipeline must be 'A' or 'B'")
 
-    input_pdf = data.get("input_pdf")
-    output_pdf = data.get("output_pdf")
-    if not input_pdf or not output_pdf:
-        raise ValueError("config must specify input_pdf and output_pdf")
+    input_path_value = data.get("input_path") or data.get("input_pdf")
+    output_path_value = data.get("output_path") or data.get("output_pdf")
+    if not input_path_value or not output_path_value:
+        raise ValueError("config must specify input_path/output_path")
 
     ocr = _build_ocr_config(data.get("ocr", {}))
     translate = _build_translate_config(data.get("translate", {}))
@@ -95,9 +91,8 @@ def load_config(path: Path) -> AppConfig:
     cleanup = bool(data.get("cleanup_working", False))
 
     return AppConfig(
-        pipeline=pipeline,
-        input_pdf=Path(input_pdf),
-        output_pdf=Path(output_pdf),
+        input_path=Path(input_path_value),
+        output_path=Path(output_path_value),
         ocr=ocr,
         translate=translate,
         layout=layout,

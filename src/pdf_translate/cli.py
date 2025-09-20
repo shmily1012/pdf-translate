@@ -43,13 +43,16 @@ def main(argv: list[str] | None = None) -> int:
         api_key=config.translate.api_key,
     )
 
-    if config.pipeline == "A":
+    input_ext = config.input_path.suffix.lower()
+    if input_ext in {".ppt", ".pptx"}:
+        logging.info("Detected PPT/PPTX input; routing through Pipeline A")
         pipeline = PipelineA(config, translator)
     else:
+        logging.info("Detected non-PPT input; routing through Pipeline B")
         pipeline = PipelineB(config, translator)
 
-    pipeline.run()
-    logging.info("Translation finished. Output written to %s", config.output_pdf)
+    output_path = pipeline.run()
+    logging.info("Translation finished. Output written to %s", output_path)
     return 0
 
 

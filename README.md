@@ -92,8 +92,8 @@ cache/
 ## Configure the Pipeline
 Edit `configs/config.yaml` to point to your files and environment. Important keys:
 
-- `pipeline`: choose `A` for PPTX editing or `B` for overlay rendering.
-- `input_pdf` / `output_pdf`: source PDF to translate and destination path for the final result.
+- `input_path`: source document. If it ends with `.ppt` / `.pptx`, Pipeline A (PPT rewrite) runs; otherwise Pipeline B (PDF overlay) runs.
+- `output_path`: destination for the translated file (`.pptx` for Pipeline A, `.pdf` for Pipeline B).
 - `working_dir`: scratch space used for OCR output, PPTX conversions, overlays.
 - `cleanup_working`: set to `true` to remove temporary files in `working_dir` after a successful run.
 - `ocr.enabled`: set to `true` if the PDF may contain scans; disable to skip the OCR step.
@@ -119,7 +119,7 @@ If you installed the package, you can use the entry point instead:
 pdf-translate --config configs/config.yaml
 ```
 
-Logs show each stage (OCR, conversion, translation, export). When the command finishes, the translated PDF is written to `output_pdf` from the config.
+Logs show each stage (OCR, conversion, translation, export). When the command finishes, the CLI prints the resolved output path from your config.
 
 ### Pipeline A tips
 - The conversion uses `pdf2pptx`/`PyMuPDF`, which may flatten complex effects; inspect the generated PPTX (saved alongside your PDF) and adjust text boxes if needed.

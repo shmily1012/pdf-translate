@@ -46,21 +46,13 @@ class PipelineA:
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
     def run(self) -> Path:
-        source_pdf = self.config.input_pdf
+        source_path = self.config.input_path
         if self.config.ocr.enabled:
-            source_pdf = ensure_searchable_pdf(source_pdf, self.config.ocr.lang, self.work_dir)
+            source_path = ensure_searchable_pdf(source_path, self.config.ocr.lang, self.work_dir)
 
-        pptx_path = self._convert_pdf_to_pptx(source_pdf)
+        pptx_path = self._convert_pdf_to_pptx(source_path)
         translated_pptx = self._translate_pptx(pptx_path)
-        self._persist_pptx(translated_pptx)
-
-        output_path = self.config.output_pdf
-        if output_path.suffix.lower() == ".pdf":
-            logger.info("Generating final PDF using overlay pipeline (no LibreOffice)")
-            from .pipeline_b import PipelineB
-
-            overlay_pipeline = PipelineB(self.config, self.translator, work_dir=self.work_dir)
-            output_path = overlay_pipeline.run()
+        output_path = self._persist_output(translated_pptx)
 
         if self.config.cleanup_working:
             logger.debug("Cleaning working directory %s", self.work_dir)
@@ -70,7 +62,7 @@ class PipelineA:
 
     def _convert_pdf_to_pptx(self, pdf_path: Path) -> Path:
         logger.info("Converting %s to PPTX via pdf2pptx", pdf_path)
-        if pdf_path.suffix.lower() == ".pptx":
+        if pdf_path.suffix.lower() in {".ppt", ".pptx"}:
             target = self.work_dir / pdf_path.name
             shutil.copy2(pdf_path, target)
             return target
@@ -110,16 +102,21 @@ class PipelineA:
         presentation.save(str(translated_path))
         return translated_path
 
-    def _persist_pptx(self, translated_pptx: Path) -> Path:
-        target = self.config.output_pdf
-        if target.suffix.lower() == ".pdf":
-            pptx_target = target.with_suffix(".pptx")
-        else:
-            pptx_target = target
-        ensure_parent(pptx_target)
-        shutil.copy2(translated_pptx, pptx_target)
-        logger.info("Translated PPTX saved to %s", pptx_target)
-        return pptx_target
+    def _persist_output(self, translated_pptx: Path) -> Path:
+        target = self.config.output_path
+        suffix = target.suffix.lower()
+        if suffix not in {".ppt", ".pptx"}:
+            adjusted = target.with_suffix(".pptx")
+            logger.warning(
+                "Pipeline A expects PPT/PPTX output. Writing translated deck to %s instead of %s.",
+                adjusted,
+                target,
+            )
+            target = adjusted
+        ensure_parent(target)
+        shutil.copy2(translated_pptx, target)
+        logger.info("Translated PPTX saved to %s", target)
+        return target
 
     def _collect_paragraphs(self, presentation: Presentation) -> List[ParagraphHandle]:
         handles: List[ParagraphHandle] = []

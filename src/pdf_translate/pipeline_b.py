@@ -49,7 +49,7 @@ class PipelineB:
         self._background_color = self._prepare_background_color(config.layout.background_color)
 
     def run(self) -> Path:
-        source_pdf = self.config.input_pdf
+        source_pdf = self.config.input_path
         if self.config.ocr.enabled:
             source_pdf = ensure_searchable_pdf(source_pdf, self.config.ocr.lang, self.work_dir)
 
@@ -110,7 +110,7 @@ class PipelineB:
             grouped.setdefault(block.page, []).append((block, translated))
 
         # Determine page sizes via pdfplumber to ensure alignment
-        with pdfplumber.open(str(self.config.input_pdf)) as pdf:
+        with pdfplumber.open(str(self.config.input_path)) as pdf:
             page_sizes = [ (page.width, page.height) for page in pdf.pages ]
 
         for page_index, (width, height) in enumerate(page_sizes):
@@ -215,13 +215,13 @@ class PipelineB:
         return "\n".join(result)
 
     def _merge_overlay(self, base_pdf: Path, overlay_pdf: Path) -> Path:
-        ensure_parent(self.config.output_pdf)
+        ensure_parent(self.config.output_path)
         base = Pdf.open(str(base_pdf))
         overlay = Pdf.open(str(overlay_pdf))
         for page, layer in zip(base.pages, overlay.pages):
             page.add_overlay(layer)
-        base.save(str(self.config.output_pdf))
-        return self.config.output_pdf
+        base.save(str(self.config.output_path))
+        return self.config.output_path
 
     def _resolve_font(self, preferred_name: str) -> str:
         if preferred_name in pdfmetrics.getRegisteredFontNames():
