@@ -2,7 +2,6 @@ openai
 ocrmypdf
 pdfplumber
 pdfminer.six
-pdf2pptx
 python-pptx
 python-docx
 pikepdf
@@ -10,4 +9,3 @@ reportlab
 pillow
 pyyaml
 tqdm
-PyMuPDF

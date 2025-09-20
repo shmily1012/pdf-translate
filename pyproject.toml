@@ -10,7 +10,6 @@ dependencies = [
   "ocrmypdf",
   "pdfplumber",
   "pdfminer.six",
-  "pdf2pptx",
   "python-pptx",
   "python-docx",
   "pikepdf",
@@ -18,7 +17,6 @@ dependencies = [
   "pillow",
   "pyyaml",
   "tqdm",
-  "PyMuPDF",
 ]
 
 [project.scripts]

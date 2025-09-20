@@ -8,10 +8,8 @@ from pathlib import Path
 from typing import List
 
 from pptx import Presentation  # type: ignore
-from pdf2pptx import Converter  # type: ignore
 
 from .config import AppConfig
-from .ocr import ensure_searchable_pdf
 from .translation import TranslationClient
 from .utils import ensure_parent, clean_directory
 
@@ -47,10 +45,7 @@ class PipelineA:
 
     def run(self) -> Path:
         source_path = self.config.input_path
-        if self.config.ocr.enabled:
-            source_path = ensure_searchable_pdf(source_path, self.config.ocr.lang, self.work_dir)
-
-        pptx_path = self._convert_pdf_to_pptx(source_path)
+        pptx_path = self._prepare_pptx_source(source_path)
         translated_pptx = self._translate_pptx(pptx_path)
         output_path = self._persist_output(translated_pptx)
 
@@ -60,30 +55,15 @@ class PipelineA:
 
         return output_path
 
-    def _convert_pdf_to_pptx(self, pdf_path: Path) -> Path:
-        logger.info("Converting %s to PPTX via pdf2pptx", pdf_path)
-        if pdf_path.suffix.lower() in {".ppt", ".pptx"}:
-            target = self.work_dir / pdf_path.name
-            shutil.copy2(pdf_path, target)
-            return target
-
-        pptx_path = self.work_dir / f"{pdf_path.stem}.pptx"
-        ensure_parent(pptx_path)
-        if pptx_path.exists() and pptx_path.stat().st_mtime >= pdf_path.stat().st_mtime:
-            logger.info("Using cached PPTX at %s", pptx_path)
-            return pptx_path
-
-        converter = Converter(str(pdf_path))
-        try:
-            converter.convert(str(pptx_path))
-        finally:
-            converter.close()
-
-        if not pptx_path.exists():
-            raise FileNotFoundError(f"pdf2pptx did not create PPTX at {pptx_path}")
-
-        logger.debug("Created PPTX at %s", pptx_path)
-        return pptx_path
+    def _prepare_pptx_source(self, path: Path) -> Path:
+        suffix = path.suffix.lower()
+        if suffix not in {".ppt", ".pptx"}:
+            raise ValueError(
+                f"Pipeline A expects PPT/PPTX input, got {path}. Use a PPT source or allow the CLI to route this file through Pipeline B."
+            )
+        target = self.work_dir / path.name
+        shutil.copy2(path, target)
+        return target
 
     def _translate_pptx(self, pptx_path: Path) -> Path:
         logger.info("Translating text content within %s", pptx_path)

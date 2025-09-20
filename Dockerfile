@@ -13,7 +13,6 @@ RUN apt-get update && \
         tesseract-ocr \
         tesseract-ocr-kor \
         fonts-noto-cjk \
-        swig \
         libqpdf-dev \
         libxml2-dev \
         libxslt1-dev \
@@ -22,8 +21,6 @@ RUN apt-get update && \
         zlib1g-dev && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-
-RUN swig -version
 
 WORKDIR /app
 
