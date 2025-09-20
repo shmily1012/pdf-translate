@@ -23,6 +23,8 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+RUN swig -version
+
 WORKDIR /app
 
 COPY pyproject.toml README.md requirements.txt ./
