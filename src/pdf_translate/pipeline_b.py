@@ -189,78 +189,53 @@ class PipelineB:
             if self._background_alpha is not None and hasattr(canvas_obj, "setFillAlpha"):
                 canvas_obj.setFillAlpha(1.0)
             canvas_obj.restoreState()
-        raw_lines = translated.splitlines() or [translated]
-        expanded_lines: List[str] = []
-        for line in raw_lines:
-            adjusted = self._fit_line(line, font_name, block.font_size or block_height, block_width)
-            expanded_lines.extend(segment for segment in adjusted.split("\n") if segment or line)
-        if not expanded_lines:
-            expanded_lines = [""]
+        max_width = block_width
+        max_height = block_height
 
-        line_count = max(1, len(expanded_lines))
-        base_font_size = block.font_size if block.font_size else block_height / line_count
-        shrink_factor = 1.0 - (self.config.layout.overflow_shrink_pct / 100.0)
-        font_size = max(6, base_font_size * shrink_factor)
-        line_height = font_size * 1.1
-        total_text_height = line_height * line_count
-        remaining_space = block_height - total_text_height
+        base_font = block.font_name or font_name
+        font_to_use = self._resolve_font(base_font)
+        initial_font_size = block.font_size if block.font_size else max_height * 0.8
+        lines, font_size, line_height = self._layout_text(
+            translated,
+            font_to_use,
+            max_width,
+            max_height,
+            initial_font_size,
+        )
+
+        total_text_height = line_height * len(lines)
+        remaining_space = max_height - total_text_height
         vertical_offset = max(0.0, remaining_space / 2)
 
         canvas_obj.saveState()
-        canvas_obj.setFont(font_name, font_size)
+        canvas_obj.setFont(font_to_use, font_size)
         canvas_obj.setFillColor(self._text_color)
 
         current_y = page_height - y0 - font_size - vertical_offset
-        pad_x = block_width * (self._background_padding_pct / 100.0)
-        pad_y = font_size * 0.2 + (block_height * (self._background_padding_pct / 100.0))
+        pad_x = max_width * (self._background_padding_pct / 100.0)
+        pad_y = font_size * 0.2 + (max_height * (self._background_padding_pct / 100.0))
 
-        for segment in expanded_lines:
-            if self._background_color and translated.strip():
-                text_width = pdfmetrics.stringWidth(segment, font_name, font_size)
-                bg_width = max(text_width, block_width)
+        for segment in lines:
+            if self._background_color and segment.strip():
+                text_width = pdfmetrics.stringWidth(segment, font_to_use, font_size)
                 left = x0 - pad_x
                 bottom = current_y - font_size - pad_y * 0.5
-                canvas_obj.saveState()
-                canvas_obj.setFillColor(self._background_color)
-                if self._background_alpha is not None and hasattr(canvas_obj, "setFillAlpha"):
-                    canvas_obj.setFillAlpha(min(max(self._background_alpha, 0.0), 1.0))
-                canvas_obj.rect(
-                    left,
-                    bottom,
-                    bg_width + pad_x * 2,
-                    font_size + pad_y,
-                    fill=1,
-                    stroke=0,
-                )
-                if self._background_alpha is not None and hasattr(canvas_obj, "setFillAlpha"):
-                    canvas_obj.setFillAlpha(1.0)
-                canvas_obj.restoreState()
+                width = max(text_width + pad_x * 2, 0)
+                height = font_size + pad_y
+                if width > 0 and height > 0:
+                    canvas_obj.saveState()
+                    canvas_obj.setFillColor(self._background_color)
+                    if self._background_alpha is not None and hasattr(canvas_obj, "setFillAlpha"):
+                        canvas_obj.setFillAlpha(min(max(self._background_alpha, 0.0), 1.0))
+                    canvas_obj.rect(left, bottom, width, height, fill=1, stroke=0)
+                    if self._background_alpha is not None and hasattr(canvas_obj, "setFillAlpha"):
+                        canvas_obj.setFillAlpha(1.0)
+                    canvas_obj.restoreState()
 
             canvas_obj.drawString(x0, current_y, segment)
             current_y -= line_height
 
         canvas_obj.restoreState()
-
-    def _fit_line(self, text: str, font_name: str, font_size: float, max_width: float) -> str:
-        width = pdfmetrics.stringWidth(text, font_name, font_size)
-        if width <= max_width:
-            return text
-        words = text.split()
-        if not words:
-            return text
-        result: List[str] = []
-        current: List[str] = []
-        for word in words:
-            tentative = " ".join(current + [word]) if current else word
-            if pdfmetrics.stringWidth(tentative, font_name, font_size) <= max_width:
-                current.append(word)
-            else:
-                if current:
-                    result.append(" ".join(current))
-                current = [word]
-        if current:
-            result.append(" ".join(current))
-        return "\n".join(result)
 
     def _merge_overlay(self, base_pdf: Path, overlay_pdf: Path) -> Path:
         ensure_parent(self.config.output_path)
@@ -348,3 +323,62 @@ class PipelineB:
             return None
         most_common, _ = Counter(fonts).most_common(1)[0]
         return most_common
+
+    def _layout_text(
+        self,
+        text: str,
+        font_name: str,
+        max_width: float,
+        max_height: float,
+        initial_font_size: float,
+    ) -> tuple[List[str], float, float]:
+        font_size = max(6.0, initial_font_size)
+        for _ in range(12):
+            lines = self._wrap_text(text, font_name, font_size, max_width)
+            line_count = max(1, len(lines))
+            line_height = font_size * 1.1
+            total_height = line_height * line_count
+            widest = max((pdfmetrics.stringWidth(line, font_name, font_size) for line in lines), default=0.0)
+
+            height_ratio = max_height / total_height if total_height > 0 else 1.0
+            width_ratio = max_width / widest if widest > 0 else 1.0
+
+            scale = min(height_ratio, width_ratio, 1.0)
+            if scale >= 0.995:
+                return lines, font_size, line_height
+            font_size = max(6.0, font_size * scale * 0.98)
+
+        lines = self._wrap_text(text, font_name, font_size, max_width)
+        return lines, font_size, font_size * 1.1
+
+    @staticmethod
+    def _wrap_text(text: str, font_name: str, font_size: float, max_width: float) -> List[str]:
+        paragraphs = text.splitlines() or [text]
+        lines: List[str] = []
+        for para in paragraphs:
+            fitted = PipelineB._fit_line_static(para, font_name, font_size, max_width)
+            for segment in fitted.split("\n"):
+                lines.append(segment)
+        return lines or [""]
+
+    @staticmethod
+    def _fit_line_static(text: str, font_name: str, font_size: float, max_width: float) -> str:
+        width = pdfmetrics.stringWidth(text, font_name, font_size)
+        if width <= max_width:
+            return text
+        words = text.split()
+        if not words:
+            return text
+        result: List[str] = []
+        current: List[str] = []
+        for word in words:
+            tentative = " ".join(current + [word]) if current else word
+            if pdfmetrics.stringWidth(tentative, font_name, font_size) <= max_width:
+                current.append(word)
+            else:
+                if current:
+                    result.append(" ".join(current))
+                current = [word]
+        if current:
+            result.append(" ".join(current))
+        return "\n".join(result)
