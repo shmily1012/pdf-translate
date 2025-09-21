@@ -189,25 +189,57 @@ class PipelineB:
             if self._background_alpha is not None and hasattr(canvas_obj, "setFillAlpha"):
                 canvas_obj.setFillAlpha(1.0)
             canvas_obj.restoreState()
-        lines = translated.splitlines() or [translated]
-        line_count = max(1, len(lines))
+        raw_lines = translated.splitlines() or [translated]
+        expanded_lines: List[str] = []
+        for line in raw_lines:
+            adjusted = self._fit_line(line, font_name, block.font_size or block_height, block_width)
+            expanded_lines.extend(segment for segment in adjusted.split("\n") if segment or line)
+        if not expanded_lines:
+            expanded_lines = [""]
+
+        line_count = max(1, len(expanded_lines))
         base_font_size = block.font_size if block.font_size else block_height / line_count
         shrink_factor = 1.0 - (self.config.layout.overflow_shrink_pct / 100.0)
         font_size = max(6, base_font_size * shrink_factor)
         line_height = font_size * 1.1
+        total_text_height = line_height * line_count
+        remaining_space = block_height - total_text_height
+        vertical_offset = max(0.0, remaining_space / 2)
 
-        y_start = page_height - y0 - font_size
-        text_obj = canvas_obj.beginText()
-        text_obj.setTextOrigin(x0, y_start)
-        text_obj.setFont(font_name, font_size)
-        text_obj.setFillColor(self._text_color)
-        text_obj.setLeading(line_height)
+        canvas_obj.saveState()
+        canvas_obj.setFont(font_name, font_size)
+        canvas_obj.setFillColor(self._text_color)
 
-        for line in lines:
-            adjusted = self._fit_line(line, font_name, font_size, block_width)
-            for segment in adjusted.split("\n"):
-                text_obj.textLine(segment)
-        canvas_obj.drawText(text_obj)
+        current_y = page_height - y0 - font_size - vertical_offset
+        pad_x = block_width * (self._background_padding_pct / 100.0)
+        pad_y = font_size * 0.2 + (block_height * (self._background_padding_pct / 100.0))
+
+        for segment in expanded_lines:
+            if self._background_color and translated.strip():
+                text_width = pdfmetrics.stringWidth(segment, font_name, font_size)
+                bg_width = max(text_width, block_width)
+                left = x0 - pad_x
+                bottom = current_y - font_size - pad_y * 0.5
+                canvas_obj.saveState()
+                canvas_obj.setFillColor(self._background_color)
+                if self._background_alpha is not None and hasattr(canvas_obj, "setFillAlpha"):
+                    canvas_obj.setFillAlpha(min(max(self._background_alpha, 0.0), 1.0))
+                canvas_obj.rect(
+                    left,
+                    bottom,
+                    bg_width + pad_x * 2,
+                    font_size + pad_y,
+                    fill=1,
+                    stroke=0,
+                )
+                if self._background_alpha is not None and hasattr(canvas_obj, "setFillAlpha"):
+                    canvas_obj.setFillAlpha(1.0)
+                canvas_obj.restoreState()
+
+            canvas_obj.drawString(x0, current_y, segment)
+            current_y -= line_height
+
+        canvas_obj.restoreState()
 
     def _fit_line(self, text: str, font_name: str, font_size: float, max_width: float) -> str:
         width = pdfmetrics.stringWidth(text, font_name, font_size)
