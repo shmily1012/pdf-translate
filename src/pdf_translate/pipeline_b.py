@@ -79,26 +79,28 @@ class PipelineB:
                     continue
                 lines = self._group_chars_into_lines(chars)
                 for line_chars in lines:
-                    text = self._compose_text(line_chars)
-                    if not text.strip():
-                        continue
-                    if not self._has_hangul(text):
-                        continue
-                    x0 = min(float(ch["x0"]) for ch in line_chars)
-                    y0 = min(float(ch["top"]) for ch in line_chars)
-                    x1 = max(float(ch["x1"]) for ch in line_chars)
-                    y1 = max(float(ch["bottom"]) for ch in line_chars)
-                    avg_size = sum(float(ch.get("size", 0)) for ch in line_chars) / len(line_chars)
-                    font_name = self._dominant_font(line_chars)
-                    blocks.append(
-                        TextBlock(
-                            page=page_index,
-                            text=text.strip(),
-                            bbox=(x0, y0, x1, y1),
-                            font_size=avg_size,
-                            font_name=font_name,
+                    segments = self._split_line_segments(line_chars)
+                    for segment_chars in segments:
+                        text = self._compose_text(segment_chars)
+                        if not text.strip():
+                            continue
+                        if not self._has_hangul(text):
+                            continue
+                        x0 = min(float(ch["x0"]) for ch in segment_chars)
+                        y0 = min(float(ch["top"]) for ch in segment_chars)
+                        x1 = max(float(ch["x1"]) for ch in segment_chars)
+                        y1 = max(float(ch["bottom"]) for ch in segment_chars)
+                        avg_size = sum(float(ch.get("size", 0)) for ch in segment_chars) / len(segment_chars)
+                        font_name = self._dominant_font(segment_chars)
+                        blocks.append(
+                            TextBlock(
+                                page=page_index,
+                                text=text.strip(),
+                                bbox=(x0, y0, x1, y1),
+                                font_size=avg_size,
+                                font_name=font_name,
+                            )
                         )
-                    )
         logger.info("Collected %d text blocks for translation", len(blocks))
         return blocks
 
@@ -300,6 +302,30 @@ class PipelineB:
         if current:
             lines.append(current)
         return lines
+
+    @staticmethod
+    def _split_line_segments(line_chars: List[dict], gap_ratio: float = 2.0, min_gap: float = 6.0) -> List[List[dict]]:
+        if not line_chars:
+            return []
+        sorted_chars = sorted(line_chars, key=lambda ch: ch["x0"])
+        avg_width = sum((ch["x1"] - ch["x0"]) for ch in sorted_chars) / max(len(sorted_chars), 1)
+        threshold = max(avg_width * gap_ratio, min_gap)
+
+        segments: List[List[dict]] = []
+        current: List[dict] = []
+        last_x1: float | None = None
+        for ch in sorted_chars:
+            x0 = ch["x0"]
+            if last_x1 is not None and (x0 - last_x1) > threshold:
+                if current:
+                    segments.append(current)
+                current = []
+            current.append(ch)
+            last_x1 = ch["x1"]
+
+        if current:
+            segments.append(current)
+        return segments
 
     @staticmethod
     def _compose_text(line_chars: List[dict], gap_ratio: float = 0.15) -> str:
