@@ -5,11 +5,17 @@ import logging
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+from typing import List, TYPE_CHECKING
 
 from pptx import Presentation  # type: ignore
 from tqdm import tqdm
 
+from pptx.enum.shapes import MSO_SHAPE_TYPE  # type: ignore
+from pptx.enum.text import MSO_AUTO_SIZE  # type: ignore
+
+
+if TYPE_CHECKING:
+    from pptx.text.text import TextFrame
 from .config import AppConfig
 from .translation import TranslationClient
 from .utils import ensure_parent, clean_directory
@@ -21,6 +27,8 @@ logger = logging.getLogger(__name__)
 class ParagraphHandle:
     paragraph: "Paragraph"
     text: str
+    text_frame: "TextFrame"
+    original_auto_size: MSO_AUTO_SIZE | None
 
 
 def _has_hangul(text: str) -> bool:
@@ -106,17 +114,64 @@ class PipelineA:
         handles: List[ParagraphHandle] = []
         for slide in presentation.slides:
             for shape in slide.shapes:
-                if not getattr(shape, "has_text_frame", False):
-                    continue
-                text_frame = shape.text_frame
-                for paragraph in text_frame.paragraphs:
-                    text = paragraph.text.strip()
-                    if not text:
-                        continue
-                    if not _has_hangul(text):
-                        continue
-                    handles.append(ParagraphHandle(paragraph=paragraph, text=text))
+                self._gather_paragraphs_from_shape(shape, handles)
         return handles
+
+    def _gather_paragraphs_from_shape(self, shape, handles: List[ParagraphHandle]) -> None:
+        if getattr(shape, "has_text_frame", False):
+            self._gather_from_text_frame(shape.text_frame, handles)
+        if getattr(shape, "has_table", False):
+            table = shape.table
+            for row in table.rows:
+                for cell in row.cells:
+                    text_frame = getattr(cell, "text_frame", None)
+                    if text_frame is not None:
+                        self._gather_from_text_frame(text_frame, handles)
+        shape_type = getattr(shape, "shape_type", None)
+        if shape_type == MSO_SHAPE_TYPE.GROUP:
+            for nested_shape in shape.shapes:
+                self._gather_paragraphs_from_shape(nested_shape, handles)
+        if getattr(shape, "has_chart", False):
+            self._gather_from_chart(shape.chart, handles)
+
+    def _gather_from_text_frame(self, text_frame, handles: List[ParagraphHandle]) -> None:
+        for paragraph in text_frame.paragraphs:
+            text = paragraph.text.strip()
+            if not text:
+                continue
+            if not _has_hangul(text):
+                continue
+            auto_size = getattr(text_frame, "auto_size", None)
+            handles.append(ParagraphHandle(paragraph=paragraph, text=text, text_frame=text_frame, original_auto_size=auto_size))
+
+    def _gather_from_chart(self, chart, handles: List[ParagraphHandle]) -> None:
+        if chart is None:
+            return
+        if getattr(chart, "has_title", False):
+            chart_title = getattr(chart, "chart_title", None)
+            if chart_title is not None:
+                self._gather_from_text_frame(chart_title.text_frame, handles)
+        for axis_name in ("category_axis", "value_axis", "series_axis"):
+            axis = getattr(chart, axis_name, None)
+            if axis is None:
+                continue
+            if getattr(axis, "has_title", False):
+                axis_title = getattr(axis, "axis_title", None)
+                if axis_title is not None:
+                    self._gather_from_text_frame(axis_title.text_frame, handles)
+
+    def _ensure_text_frame_bounds(self, handle: ParagraphHandle, translation: str) -> None:
+        if len(translation) <= len(handle.text):
+            return
+        if handle.original_auto_size == MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE:
+            return
+        text_frame = handle.text_frame
+        try:
+            if hasattr(text_frame, "word_wrap") and text_frame.word_wrap is False:
+                text_frame.word_wrap = True
+            text_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+        except (AttributeError, TypeError, ValueError):
+            return
 
     def _apply_translation(self, handle: ParagraphHandle, translation: str) -> None:
         paragraph = handle.paragraph
@@ -127,3 +182,4 @@ class PipelineA:
         else:
             run = paragraph.add_run()
             run.text = translation
+        self._ensure_text_frame_bounds(handle, translation)
