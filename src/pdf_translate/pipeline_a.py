@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import List
 
 from pptx import Presentation  # type: ignore
+from tqdm import tqdm
 
 from .config import AppConfig
 from .translation import TranslationClient
@@ -73,7 +74,10 @@ class PipelineA:
         logger.info("Identified %d paragraphs containing Hangul", len(texts))
         if texts:
             logger.debug("Sample source paragraphs: %s", _sample_preview(texts))
-        translations = self.translator.translate_batch(texts)
+        translations = []
+        for text in tqdm(texts, desc="Translating paragraphs"):
+            translation = self.translator.translate_text(text)
+            translations.append(translation)
         if translations:
             logger.debug("Sample translated paragraphs: %s", _sample_preview(translations))
         for handle, translation in zip(handles, translations):

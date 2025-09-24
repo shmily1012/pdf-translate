@@ -56,7 +56,7 @@ Prefer a containerized setup? A `Dockerfile` is provided that bundles ocrmypdf, 
    ```
 2. Run the pipeline, mounting your working directories so results persist:
    ```bash
-   docker run --rm \
+   docker run --rm --network host  \
      -v "$(pwd)/configs:/app/configs" \
      -v "$(pwd)/data:/app/data" \
      -v "$(pwd)/outputs:/app/outputs" \
