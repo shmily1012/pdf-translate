@@ -4,3 +4,4 @@ src/pdf_translate/__pycache__/*
 src/pdf_translate.egg-info/*
 outputs/
 cache/
+build/*

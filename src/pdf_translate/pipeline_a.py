@@ -83,9 +83,11 @@ class PipelineA:
         if texts:
             logger.debug("Sample source paragraphs: %s", _sample_preview(texts))
         translations = []
-        for text in tqdm(texts, desc="Translating paragraphs"):
-            translation = self.translator.translate_text(text)
-            translations.append(translation)
+        # for text in tqdm(texts, desc="Translating paragraphs"):
+        #     translation = self.translator.translate_text(text)
+        #     translations.append(translation)
+        translations = self.translator.translate_batch(texts)
+
         if translations:
             logger.debug("Sample translated paragraphs: %s", _sample_preview(translations))
         for handle, translation in zip(handles, translations):
